@@ -1,0 +1,10 @@
+spec:
+  deploymentName: string
+  namespace: string
+  minReplicas: int
+  maxReplicas: int
+  natsMonitoringURL: string  # e.g., http://nats:8222
+  subject: string            # The queue subject
+  scaleUpThreshold: int
+  scaleDownThreshold: int
+  pollIntervalSeconds: int
