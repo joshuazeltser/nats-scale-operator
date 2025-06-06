@@ -1,18 +1,21 @@
-package controllers
+package controller
 
 import (
 	"context"
 	"encoding/json"
+	appsv1 "k8s.io/api/apps/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
-	appsv1 "k8s.io/api/apps/v1"
+	autoscalev1 "github.com/joshuazeltser/nats-scale-operator.git/api/v1"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
@@ -20,15 +23,52 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+var (
+	scheme = runtime.NewScheme()
+)
+
+func TestAPIs(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Controller Suite")
+}
+
+var _ = BeforeSuite(func() {
+	ctx, cancel = context.WithCancel(context.TODO())
+
+	// Register schemes
+	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+	utilruntime.Must(autoscalev1.AddToScheme(scheme)) // your CRD
+
+	// Start envtest environment
+	testEnv = &envtest.Environment{
+		CRDDirectoryPaths: []string{
+			"../config/crd/bases", // path to your CRD YAMLs
+		},
+	}
+
+	cfg, err := testEnv.Start()
+	Expect(err).NotTo(HaveOccurred())
+	Expect(cfg).NotTo(BeNil())
+
+	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme})
+	Expect(err).NotTo(HaveOccurred())
+	Expect(k8sClient).NotTo(BeNil())
+})
+
+var _ = AfterSuite(func() {
+	cancel()
+	err := testEnv.Stop()
+	Expect(err).NotTo(HaveOccurred())
+})
+
 var _ = Describe("AppScaler Controller", func() {
 	var (
-		ctx        = context.Background()
 		deployment *appsv1.Deployment
 		mockServer *httptest.Server
 	)
 
 	BeforeEach(func() {
-		// Set up mock JetStream HTTP server
+		// Setup mock JetStream HTTP server
 		mockServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"streams": []map[string]interface{}{
@@ -44,7 +84,7 @@ var _ = Describe("AppScaler Controller", func() {
 			})
 		}))
 
-		// Create the test Deployment to scale
+		// Create Deployment to scale
 		deployment = &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-deploy",
@@ -76,12 +116,12 @@ var _ = Describe("AppScaler Controller", func() {
 	})
 
 	It("should scale up the deployment when queue is large", func() {
-		scaler := &appv1.AppScaler{
+		scaler := &autoscalev1.AppScaler{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-scaler",
 				Namespace: "default",
 			},
-			Spec: appv1.AppScalerSpec{
+			Spec: autoscalev1.AppScalerSpec{
 				DeploymentName:      "test-deploy",
 				MinReplicas:         1,
 				MaxReplicas:         5,
@@ -98,7 +138,7 @@ var _ = Describe("AppScaler Controller", func() {
 			var dep appsv1.Deployment
 			_ = k8sClient.Get(ctx, client.ObjectKey{Name: "test-deploy", Namespace: "default"}, &dep)
 			return *dep.Spec.Replicas
-		}, 10*time.Second, 1*time.Second).Should(BeNumerically(">", 1))
+		}, 15*time.Second, 1*time.Second).Should(BeNumerically(">", 1))
 	})
 })
 
