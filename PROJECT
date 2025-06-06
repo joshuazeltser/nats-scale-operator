@@ -6,6 +6,8 @@ cliVersion: 4.6.0
 domain: example.com
 layout:
 - go.kubebuilder.io/v4
+plugins:
+  helm.kubebuilder.io/v1-alpha: {}
 projectName: scale-operator
 repo: github.com/joshuazeltser/nats-scale-operator.git
 resources:

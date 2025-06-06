@@ -24,7 +24,7 @@ import (
 )
 
 var (
-	scheme = runtime.NewScheme()
+	scheme1 = runtime.NewScheme()
 )
 
 func TestAPIs(t *testing.T) {
@@ -36,8 +36,8 @@ var _ = BeforeSuite(func() {
 	ctx, cancel = context.WithCancel(context.TODO())
 
 	// Register schemes
-	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(autoscalev1.AddToScheme(scheme)) // your CRD
+	utilruntime.Must(clientgoscheme.AddToScheme(scheme1))
+	utilruntime.Must(autoscalev1.AddToScheme(scheme1)) // your CRD
 
 	// Start envtest environment
 	testEnv = &envtest.Environment{
@@ -50,7 +50,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cfg).NotTo(BeNil())
 
-	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme})
+	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme1})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
 })

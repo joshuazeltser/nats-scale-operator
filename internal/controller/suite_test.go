@@ -62,7 +62,7 @@ var _ = BeforeSuite(func() {
 	err = autoscalev1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
-	// +kubebuilder:scaffold:scheme
+	// +kubebuilder:scaffold:scheme1
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
