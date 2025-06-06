@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- autoscale_v1_appscaler.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples
