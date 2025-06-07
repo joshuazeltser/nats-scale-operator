@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"net/http"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -112,6 +113,7 @@ func (r *AppScalerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 func (r *AppScalerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&autoscalev1.AppScaler{}).
+		WithOptions(controller.Options{MaxConcurrentReconciles: 5}).
 		Named("appscaler").
 		Complete(r)
 }
