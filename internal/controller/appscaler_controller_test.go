@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	autoscalev1 "github.com/joshuazeltser/nats-scale-operator.git/api/v1"
+	autoscalev1 "github.com/joshuazeltser/nats-scale-operator/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"

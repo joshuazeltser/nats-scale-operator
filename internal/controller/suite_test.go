@@ -32,7 +32,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	autoscalev1 "github.com/joshuazeltser/nats-scale-operator.git/api/v1"
+	autoscalev1 "github.com/joshuazeltser/nats-scale-operator/api/v1"
 	// +kubebuilder:scaffold:imports
 )
 

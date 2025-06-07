@@ -25,7 +25,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/joshuazeltser/nats-scale-operator.git/test/utils"
+	"github.com/joshuazeltser/nats-scale-operator/test/utils"
 )
 
 var (

@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	_ "gopkg.in/check.v1"
 	"io/ioutil"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -32,7 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	autoscalev1 "github.com/joshuazeltser/nats-scale-operator.git/api/v1"
+	autoscalev1 "github.com/joshuazeltser/nats-scale-operator/api/v1"
 )
 
 // AppScalerReconciler reconciles a AppScaler object

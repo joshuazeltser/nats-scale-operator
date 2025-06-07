@@ -37,8 +37,8 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	autoscalev1 "github.com/joshuazeltser/nats-scale-operator.git/api/v1"
-	"github.com/joshuazeltser/nats-scale-operator.git/internal/controller"
+	autoscalev1 "github.com/joshuazeltser/nats-scale-operator/api/v1"
+	"github.com/joshuazeltser/nats-scale-operator/internal/controller"
 	// +kubebuilder:scaffold:imports
 )
 
