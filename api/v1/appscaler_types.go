@@ -33,13 +33,11 @@ type AppScalerSpec struct {
 	MinReplicas         int32  `json:"minReplicas"`
 	MaxReplicas         int32  `json:"maxReplicas"`
 	NatsMonitoringURL   string `json:"natsMonitoringUrl"`
-	Subject             string `json:"subject"`
 	ScaleUpThreshold    int    `json:"scaleUpThreshold"`
 	ScaleDownThreshold  int    `json:"scaleDownThreshold"`
 	PollIntervalSeconds int32  `json:"pollIntervalSeconds"`
 	// For JetStream support
-	Stream   string `json:"stream"`
-	Consumer string `json:"consumer"`
+	Stream string `json:"stream"`
 }
 
 // AppScalerStatus defines the observed state of AppScaler.

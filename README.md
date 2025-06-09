@@ -61,6 +61,8 @@ of deployments based on NATS JetStream queue metrics. This is particularly usefu
    ```bash
    kubectl apply -f config/samples/autoscale_v1_appscaler.yaml
    ```
+### Example CRD:
+ljjljoi
 
 ## NATS Deployment and Setup
 
@@ -83,25 +85,16 @@ This guide covers:
 
 ### Steps
 
-1. **Add the Helm repository:**
+1. **Navigate to helm directory:**
    ```bash
-   helm repo add nats-scale-operator https://your-helm-repo-url
-   helm repo update
+   cd dist/chart
    ```
 
-2. **Install the operator:**
-   ```bash
-   helm install nats-scale-operator nats-scale-operator/nats-scale-operator \
-     --namespace nats-scale-operator-system \
-     --create-namespace
-   ```
-
-3. **Customize installation:**
+2**Customize & Install installation:**
    ```bash
    # Create values file
    cat > values.yaml << EOF
    image:
-     repository: your-registry/nats-scale-operator
      tag: latest
    
    resources:
@@ -122,20 +115,20 @@ This guide covers:
      --values values.yaml
    ```
 
-4. **Verify installation:**
+3. **Verify installation:**
    ```bash
    helm status nats-scale-operator -n nats-scale-operator-system
    kubectl get pods -n nats-scale-operator-system
    ```
 
-5. **Upgrade the operator:**
+4. **Upgrade the operator:**
    ```bash
    helm upgrade nats-scale-operator nats-scale-operator/nats-scale-operator \
      --namespace nats-scale-operator-system \
      --values values.yaml
    ```
 
-6. **Uninstall:**
+5. **Uninstall:**
    ```bash
    helm uninstall nats-scale-operator -n nats-scale-operator-system
    ```
@@ -144,79 +137,16 @@ This guide covers:
 
 The project includes comprehensive test suites using Kubebuilder's envtest framework for integration testing.
 
-### Prerequisites
-
-- Go 1.21+
-- Docker for kind/minikube testing
-- Make
-
 ### Running Tests
 
-1. **Run unit tests:**
+1. Build test docker
    ```bash
-   make test
+    docker build . -t autoscaler-tests:latest -f Dockerfile.test
    ```
-
-2. **Run tests with coverage:**
+2. Run tests
    ```bash
-   make test-coverage
+   docker run autoscaler-tests:latest
    ```
-
-3. **Run integration tests with envtest:**
-   ```bash
-   # This starts a local control plane for testing
-   make envtest
-   ```
-
-4. **Run specific test suites:**
-   ```bash
-   # Controller tests only
-   go test ./internal/controller/... -v
-   
-   # API tests only  
-   go test ./api/... -v
-   
-   # Run with race detection
-   go test -race ./...
-   ```
-
-5. **End-to-end testing:**
-   ```bash
-   # Build and test in minikube
-   make e2e-test
-   ```
-
-### Test Configuration
-
-Tests use the following environment:
-- **Kubernetes Version**: 1.28+
-- **Control Plane**: envtest (etcd + kube-apiserver)
-- **Test Timeout**: 10 minutes
-- **Parallel Execution**: Enabled for unit tests
-
-### Test Coverage
-
-The test suite covers:
-- ✅ Controller reconciliation logic
-- ✅ Custom resource validation
-- ✅ NATS integration (mocked)
-- ✅ Scaling behavior
-- ✅ Error handling
-- ✅ RBAC permissions
-
-Run `make test-coverage` to generate detailed coverage reports.
-
----
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new functionality
-5. Run the test suite: `make test`
-6. Submit a pull request
-
 ## License
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.

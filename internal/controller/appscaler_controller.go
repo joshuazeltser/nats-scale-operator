@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"net/http"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sync"
 	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -42,6 +43,17 @@ type AppScalerReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 }
+
+type ScalingEvent struct {
+	Timestamp      time.Time `json:"timestamp"`
+	DeploymentName string    `json:"deployment"`
+	OldReplicas    int32     `json:"oldReplicas"`
+	NewReplicas    int32     `json:"newReplicas"`
+	Reason         string    `json:"reason"`
+}
+
+var scalingHistory []ScalingEvent
+var scalingHistoryLock sync.Mutex
 
 // RBAC permissions for AppScaler custom resource
 //+kubebuilder:rbac:groups=autoscale.example.com,resources=appscalers,verbs=get;list;watch;create;update;patch;delete
@@ -87,7 +99,7 @@ func (r *AppScalerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
-	queueLen, err := getPendingMessagesFromJetStream(scaler.Spec.NatsMonitoringURL, scaler.Spec.Stream, scaler.Spec.Consumer)
+	queueLen, err := getPendingMessagesFromJetStream(scaler.Spec.NatsMonitoringURL, scaler.Spec.Stream)
 	if err != nil {
 		log.Error(err, "Failed to get queue length from NATS")
 		return ctrl.Result{}, err
@@ -111,6 +123,21 @@ func (r *AppScalerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			log.Error(err, "Failed to update deployment replicas")
 			return ctrl.Result{}, err
 		}
+
+		// Save scaling event
+		scalingHistoryLock.Lock()
+		scalingHistory = append(scalingHistory, ScalingEvent{
+			Timestamp:      time.Now(),
+			DeploymentName: deploy.Name,
+			OldReplicas:    currentReplicas,
+			NewReplicas:    desiredReplicas,
+			Reason:         fmt.Sprintf("Queue length: %d", queueLen),
+		})
+		// Optional: keep last 100 entries
+		if len(scalingHistory) > 100 {
+			scalingHistory = scalingHistory[len(scalingHistory)-100:]
+		}
+		scalingHistoryLock.Unlock()
 	}
 
 	return ctrl.Result{
@@ -120,14 +147,34 @@ func (r *AppScalerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *AppScalerReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	// HTTP server for scaling history
+	go func() {
+		http.HandleFunc("/scaling-history", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			scalingHistoryLock.Lock()
+			defer scalingHistoryLock.Unlock()
+			_ = json.NewEncoder(w).Encode(scalingHistory)
+		})
+
+		http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("ok"))
+		})
+
+		logf.Log.Info("Starting HTTP server on :8081")
+		if err := http.ListenAndServe(":8081", nil); err != nil {
+			logf.Log.Error(err, "HTTP server error")
+		}
+	}()
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&autoscalev1.AppScaler{}).
-		WithOptions(controller.Options{MaxConcurrentReconciles: 5}).
+		WithOptions(controller.Options{MaxConcurrentReconciles: 10}).
 		Named("appscaler").
 		Complete(r)
 }
 
-func getPendingMessagesFromJetStream(natsURL, stream, consumer string) (int, error) {
+func getPendingMessagesFromJetStream(natsURL, stream string) (int, error) {
 	url := fmt.Sprintf("%s/jsz?streams=1&stream=%s", natsURL, stream)
 	resp, err := http.Get(url)
 	if err != nil {
@@ -144,7 +191,7 @@ func getPendingMessagesFromJetStream(natsURL, stream, consumer string) (int, err
 		Streams []struct {
 			Name  string `json:"name"`
 			State struct {
-				Messages json.Number `json:"messages"`
+				Messages int64 `json:"messages"`
 			} `json:"state"`
 		} `json:"streams"`
 	}
@@ -155,10 +202,7 @@ func getPendingMessagesFromJetStream(natsURL, stream, consumer string) (int, err
 
 	for _, s := range jsData.Streams {
 		if s.Name == stream {
-			messages, err := s.State.Messages.Int64()
-			if err != nil {
-				return 0, fmt.Errorf("failed to convert messages to int: %w", err)
-			}
+			messages := s.State.Messages
 			return int(messages), nil
 		}
 	}
