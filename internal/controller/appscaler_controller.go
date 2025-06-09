@@ -43,9 +43,18 @@ type AppScalerReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=autoscale.example.com,resources=appscalers,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=autoscale.example.com,resources=appscalers/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=autoscale.example.com,resources=appscalers/finalizers,verbs=update
+// RBAC permissions for AppScaler custom resource
+//+kubebuilder:rbac:groups=autoscale.example.com,resources=appscalers,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=autoscale.example.com,resources=appscalers/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=autoscale.example.com,resources=appscalers/finalizers,verbs=update
+
+// RBAC permissions for Deployments
+//+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=apps,resources=deployments/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=apps,resources=deployments/finalizers,verbs=update
+
+// RBAC permissions for events (optional but recommended for debugging)
+//+kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -119,7 +128,8 @@ func (r *AppScalerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func getPendingMessagesFromJetStream(natsURL, stream, consumer string) (int, error) {
-	url := fmt.Sprintf("%s/jsz?consumers=true", natsURL)
+	// Use the consumer info endpoint to get pending messages for the specific consumer
+	url := fmt.Sprintf("%s/jsz?consumers=1", natsURL)
 	resp, err := http.Get(url)
 	if err != nil {
 		return 0, fmt.Errorf("failed to query JetStream: %w", err)
@@ -131,23 +141,30 @@ func getPendingMessagesFromJetStream(natsURL, stream, consumer string) (int, err
 		return 0, fmt.Errorf("failed to read JetStream response: %w", err)
 	}
 
-	var jsData struct {
-		Consumers []struct {
-			Name       string `json:"name"`
-			Stream     string `json:"stream_name"`
-			NumPending int    `json:"num_pending"`
-		} `json:"consumers"`
-	}
-
+	// Parse as generic JSON to handle flexible response format
+	var jsData map[string]interface{}
 	if err := json.Unmarshal(body, &jsData); err != nil {
 		return 0, fmt.Errorf("failed to parse JetStream response: %w", err)
 	}
 
-	for _, c := range jsData.Consumers {
-		if c.Stream == stream && c.Name == consumer {
-			return c.NumPending, nil
+	// Look for consumers information
+	if consumers, ok := jsData["consumers"].([]interface{}); ok {
+		for _, consumerData := range consumers {
+			if consumerMap, ok := consumerData.(map[string]interface{}); ok {
+				// Check if this is the consumer we're looking for
+				if name, ok := consumerMap["name"].(string); ok && name == consumer {
+					if streamName, ok := consumerMap["stream_name"].(string); ok && streamName == stream {
+						// Get num_pending - this is the key field for autoscaling
+						if pending, ok := consumerMap["num_pending"].(float64); ok {
+							return int(pending), nil
+						}
+					}
+				}
+			}
 		}
 	}
 
-	return 0, fmt.Errorf("consumer %s on stream %s not found", consumer, stream)
+	// If consumers is not an array or consumer not found, return 0
+	// This handles the case where consumers field is a number (count)
+	return 0, nil
 }

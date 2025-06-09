@@ -1,4 +1,4 @@
-FROM golang:1.22
+FROM golang:1.24
 
 # Install necessary tools
 RUN apt-get update && apt-get install -y make curl unzip
@@ -19,6 +19,6 @@ RUN make envtest
 RUN go install github.com/onsi/ginkgo/v2/ginkgo@v2.15.0
 
 # Run tests (choose one)
-CMD ["go", "test", "-v", "./internal/controller"]
+#CMD ["go", "test", "-v", "./internal/controller"]
 # or, if using ginkgo:
-# CMD ["ginkgo", "-v", "./internal/controller"]
+ CMD ["ginkgo", "-v", "./internal/controller"]

@@ -1,135 +1,222 @@
-# scale-operator
-// TODO(user): Add simple overview of use/purpose
+# NATS Scale Operator
+
+## Summary
+
+A Kubernetes operator that provides automatic scaling of deployments based on NATS JetStream consumer queue depth. 
+The operator monitors pending messages in NATS JetStream consumers and scales deployments up or down based on configurable thresholds, 
+enabling efficient auto-scaling for message-driven workloads.
 
 ## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
 
-## Getting Started
+The NATS Scale Operator extends Kubernetes with a custom `AppScaler` resource that automatically adjusts the replica count 
+of deployments based on NATS JetStream queue metrics. This is particularly useful for:
+
+- **Message Processing Workloads**: Scale workers based on message queue backlog
+- **Event-Driven Applications**: Respond to varying event volumes automatically  
+- **Cost Optimization**: Scale down during low traffic periods
+- **Performance Management**: Scale up to handle traffic spikes
+
+
+## How to Deploy Using Minikube
 
 ### Prerequisites
-- go version v1.24.0+
-- docker version 17.03+.
-- kubectl version v1.11.3+.
-- Access to a Kubernetes v1.11.3+ cluster.
 
-### To Deploy on the cluster
-**Build and push your image to the location specified by `IMG`:**
+- Minikube running with sufficient resources
+- kubectl configured for your minikube cluster
+- Docker daemon accessible
 
-```sh
-make docker-build docker-push IMG=<some-registry>/scale-operator:tag
-```
+### Steps
 
-**NOTE:** This image ought to be published in the personal registry you specified.
-And it is required to have access to pull the image from the working environment.
-Make sure you have the proper permission to the registry if the above commands don’t work.
+1. **Start Minikube and configure Docker environment:**
+   ```bash
+   minikube start --memory=4096 --cpus=2
+   eval $(minikube docker-env)
+   ```
 
-**Install the CRDs into the cluster:**
+2. **Clone and build the operator:**
+   ```bash
+   git clone <your-repo-url>
+   cd nats-scale-operator
+   make generate
+   make manifests
+   make docker-build IMG=autoscaler:dev
+   ```
 
-```sh
-make install
-```
+3. **Deploy the operator:**
+   ```bash
+   # Install CRDs
+   make install
+   
+   # Deploy operator
+   make deploy IMG=autoscaler:dev
+   ```
 
-**Deploy the Manager to the cluster with the image specified by `IMG`:**
+4. **Verify deployment:**
+   ```bash
+   kubectl get pods -n nats-scale-operator-system
+   kubectl logs -n nats-scale-operator-system deployment/nats-scale-operator-controller-manager -f
+   ```
 
-```sh
-make deploy IMG=<some-registry>/scale-operator:tag
-```
+5. **Create an AppScaler resource:**
+   ```bash
+   kubectl apply -f config/samples/autoscale_v1_appscaler.yaml
+   ```
 
-> **NOTE**: If you encounter RBAC errors, you may need to grant yourself cluster-admin
-privileges or be logged in as admin.
+## NATS Deployment and Setup
 
-**Create instances of your solution**
-You can apply the samples (examples) from the config/sample:
+For detailed instructions on deploying NATS JetStream and configuring streams/consumers, see:
 
-```sh
-kubectl apply -k config/samples/
-```
+**[NATS Setup Guide](./docs/NATS_SETUP.md)**
 
->**NOTE**: Ensure that the samples has default values to test it out.
+This guide covers:
+- NATS server deployment in Kubernetes
+- JetStream configuration
+- Stream and consumer creation
+- Testing and verification steps
 
-### To Uninstall
-**Delete the instances (CRs) from the cluster:**
+## How to Deploy Using Helm
 
-```sh
-kubectl delete -k config/samples/
-```
+### Prerequisites
 
-**Delete the APIs(CRDs) from the cluster:**
+- Helm v3+ installed
+- Access to a Kubernetes cluster
 
-```sh
-make uninstall
-```
+### Steps
 
-**UnDeploy the controller from the cluster:**
+1. **Add the Helm repository:**
+   ```bash
+   helm repo add nats-scale-operator https://your-helm-repo-url
+   helm repo update
+   ```
 
-```sh
-make undeploy
-```
+2. **Install the operator:**
+   ```bash
+   helm install nats-scale-operator nats-scale-operator/nats-scale-operator \
+     --namespace nats-scale-operator-system \
+     --create-namespace
+   ```
 
-## Project Distribution
+3. **Customize installation:**
+   ```bash
+   # Create values file
+   cat > values.yaml << EOF
+   image:
+     repository: your-registry/nats-scale-operator
+     tag: latest
+   
+   resources:
+     limits:
+       memory: 128Mi
+       cpu: 100m
+     requests:
+       memory: 64Mi
+       cpu: 50m
+   
+   replicaCount: 1
+   EOF
+   
+   # Install with custom values
+   helm install nats-scale-operator nats-scale-operator/nats-scale-operator \
+     --namespace nats-scale-operator-system \
+     --create-namespace \
+     --values values.yaml
+   ```
 
-Following the options to release and provide this solution to the users.
+4. **Verify installation:**
+   ```bash
+   helm status nats-scale-operator -n nats-scale-operator-system
+   kubectl get pods -n nats-scale-operator-system
+   ```
 
-### By providing a bundle with all YAML files
+5. **Upgrade the operator:**
+   ```bash
+   helm upgrade nats-scale-operator nats-scale-operator/nats-scale-operator \
+     --namespace nats-scale-operator-system \
+     --values values.yaml
+   ```
 
-1. Build the installer for the image built and published in the registry:
+6. **Uninstall:**
+   ```bash
+   helm uninstall nats-scale-operator -n nats-scale-operator-system
+   ```
 
-```sh
-make build-installer IMG=<some-registry>/scale-operator:tag
-```
+## How to Run Environment Tests
 
-**NOTE:** The makefile target mentioned above generates an 'install.yaml'
-file in the dist directory. This file contains all the resources built
-with Kustomize, which are necessary to install this project without its
-dependencies.
+The project includes comprehensive test suites using Kubebuilder's envtest framework for integration testing.
 
-2. Using the installer
+### Prerequisites
 
-Users can just run 'kubectl apply -f <URL for YAML BUNDLE>' to install
-the project, i.e.:
+- Go 1.21+
+- Docker for kind/minikube testing
+- Make
 
-```sh
-kubectl apply -f https://raw.githubusercontent.com/<org>/scale-operator/<tag or branch>/dist/install.yaml
-```
+### Running Tests
 
-### By providing a Helm Chart
+1. **Run unit tests:**
+   ```bash
+   make test
+   ```
 
-1. Build the chart using the optional helm plugin
+2. **Run tests with coverage:**
+   ```bash
+   make test-coverage
+   ```
 
-```sh
-kubebuilder edit --plugins=helm/v1-alpha
-```
+3. **Run integration tests with envtest:**
+   ```bash
+   # This starts a local control plane for testing
+   make envtest
+   ```
 
-2. See that a chart was generated under 'dist/chart', and users
-can obtain this solution from there.
+4. **Run specific test suites:**
+   ```bash
+   # Controller tests only
+   go test ./internal/controller/... -v
+   
+   # API tests only  
+   go test ./api/... -v
+   
+   # Run with race detection
+   go test -race ./...
+   ```
 
-**NOTE:** If you change the project, you need to update the Helm Chart
-using the same command above to sync the latest changes. Furthermore,
-if you create webhooks, you need to use the above command with
-the '--force' flag and manually ensure that any custom configuration
-previously added to 'dist/chart/values.yaml' or 'dist/chart/manager/manager.yaml'
-is manually re-applied afterwards.
+5. **End-to-end testing:**
+   ```bash
+   # Build and test in minikube
+   make e2e-test
+   ```
+
+### Test Configuration
+
+Tests use the following environment:
+- **Kubernetes Version**: 1.28+
+- **Control Plane**: envtest (etcd + kube-apiserver)
+- **Test Timeout**: 10 minutes
+- **Parallel Execution**: Enabled for unit tests
+
+### Test Coverage
+
+The test suite covers:
+- ✅ Controller reconciliation logic
+- ✅ Custom resource validation
+- ✅ NATS integration (mocked)
+- ✅ Scaling behavior
+- ✅ Error handling
+- ✅ RBAC permissions
+
+Run `make test-coverage` to generate detailed coverage reports.
+
+---
 
 ## Contributing
-// TODO(user): Add detailed information on how you would like others to contribute to this project
 
-**NOTE:** Run `make help` for more information on all potential `make` targets
-
-More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests for new functionality
+5. Run the test suite: `make test`
+6. Submit a pull request
 
 ## License
 
-Copyright 2025.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
