@@ -128,8 +128,7 @@ func (r *AppScalerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func getPendingMessagesFromJetStream(natsURL, stream, consumer string) (int, error) {
-	// Use the consumer info endpoint to get pending messages for the specific consumer
-	url := fmt.Sprintf("%s/jsz?consumers=1", natsURL)
+	url := fmt.Sprintf("%s/jsz?streams=1&stream=%s", natsURL, stream)
 	resp, err := http.Get(url)
 	if err != nil {
 		return 0, fmt.Errorf("failed to query JetStream: %w", err)
@@ -141,30 +140,28 @@ func getPendingMessagesFromJetStream(natsURL, stream, consumer string) (int, err
 		return 0, fmt.Errorf("failed to read JetStream response: %w", err)
 	}
 
-	// Parse as generic JSON to handle flexible response format
-	var jsData map[string]interface{}
+	var jsData struct {
+		Streams []struct {
+			Name  string `json:"name"`
+			State struct {
+				Messages json.Number `json:"messages"`
+			} `json:"state"`
+		} `json:"streams"`
+	}
+
 	if err := json.Unmarshal(body, &jsData); err != nil {
 		return 0, fmt.Errorf("failed to parse JetStream response: %w", err)
 	}
 
-	// Look for consumers information
-	if consumers, ok := jsData["consumers"].([]interface{}); ok {
-		for _, consumerData := range consumers {
-			if consumerMap, ok := consumerData.(map[string]interface{}); ok {
-				// Check if this is the consumer we're looking for
-				if name, ok := consumerMap["name"].(string); ok && name == consumer {
-					if streamName, ok := consumerMap["stream_name"].(string); ok && streamName == stream {
-						// Get num_pending - this is the key field for autoscaling
-						if pending, ok := consumerMap["num_pending"].(float64); ok {
-							return int(pending), nil
-						}
-					}
-				}
+	for _, s := range jsData.Streams {
+		if s.Name == stream {
+			messages, err := s.State.Messages.Int64()
+			if err != nil {
+				return 0, fmt.Errorf("failed to convert messages to int: %w", err)
 			}
+			return int(messages), nil
 		}
 	}
 
-	// If consumers is not an array or consumer not found, return 0
-	// This handles the case where consumers field is a number (count)
-	return 0, nil
+	return 0, fmt.Errorf("stream %s not found", stream)
 }
