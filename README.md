@@ -61,8 +61,32 @@ of deployments based on NATS JetStream queue metrics. This is particularly usefu
    ```bash
    kubectl apply -f config/samples/autoscale_v1_appscaler.yaml
    ```
+
+6. **Monitoring API:**
+   There is a monitoring api which returns recent scaling history (up to 100 events).
+   ```bash
+   kubectl port-forward <operator pod> 8080:8080 -n scale-operator-system
+   curl http://localhost:8080/scaling-history
+   ```
+   
 ### Example CRD:
-ljjljoi
+```
+apiVersion: autoscale.example.com/v1
+kind: AppScaler
+metadata:
+  name: scale-sample
+  namespace: default
+spec:
+  deploymentName: sample-worker
+  namespace: default
+  natsMonitoringUrl: http://nats.nats.svc.cluster.local:8222
+  stream: mystream
+  minReplicas: 1
+  maxReplicas: 5
+  scaleUpThreshold: 10
+  scaleDownThreshold: 2
+  pollIntervalSeconds: 15
+```
 
 ## NATS Deployment and Setup
 
