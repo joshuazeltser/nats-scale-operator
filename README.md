@@ -61,8 +61,12 @@ of deployments based on NATS JetStream queue metrics. This is particularly usefu
    ```bash
    kubectl apply -f config/samples/autoscale_v1_appscaler.yaml
    ```
+6. **(Optional) Deploy a sample deployment for testing**
+   ```
+   kubectl apply -f config/samples/sample_worker.yaml
+   ```
 
-6. **Monitoring API:**
+8. **Monitoring API:**
    There is a monitoring api which returns recent scaling history (up to 100 events).
    ```bash
    kubectl port-forward <operator pod> 8080:8080 -n scale-operator-system
