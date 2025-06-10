@@ -2,8 +2,8 @@
 
 ## Summary
 
-A Kubernetes operator that provides automatic scaling of deployments based on NATS JetStream consumer queue depth. 
-The operator monitors pending messages in NATS JetStream consumers and scales deployments up or down based on configurable thresholds, 
+A Kubernetes operator that provides automatic scaling of deployments based on NATS JetStream stream queue length. 
+The operator monitors the number of messages in a stream and scales deployments up or down based on configurable thresholds, 
 enabling efficient auto-scaling for message-driven workloads.
 
 ## Description
