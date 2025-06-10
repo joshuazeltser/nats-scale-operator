@@ -4,19 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	_ "gopkg.in/check.v1"
 	"io/ioutil"
-	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
 	"net/http"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sync"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	autoscalev1 "github.com/joshuazeltser/nats-scale-operator/api/v1"
@@ -146,7 +145,10 @@ func (r *AppScalerReconciler) handleScalingHistory(w http.ResponseWriter, req *h
 	defer scalingHistoryLock.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(scalingHistory)
+	if err := json.NewEncoder(w).Encode(scalingHistory); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -164,7 +166,12 @@ func getPendingMessagesFromJetStream(natsURL, stream string) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to query JetStream: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			// Log the error but don't return it as it's in a defer
+			logf.Log.Error(closeErr, "Failed to close response body")
+		}
+	}()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
