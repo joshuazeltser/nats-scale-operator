@@ -1,0 +1,32 @@
+# Simple single-stage build for development
+FROM golang:1.24-alpine
+
+# Install all required dependencies
+RUN apk add --no-cache git make curl bash tar gzip && \
+    mkdir -p /usr/local/kubebuilder/bin
+
+# Install envtest binaries
+RUN curl -L https://github.com/etcd-io/etcd/releases/download/v3.5.10/etcd-v3.5.10-linux-amd64.tar.gz | \
+    tar -xz --strip-components=1 -C /usr/local/kubebuilder/bin etcd-v3.5.10-linux-amd64/etcd && \
+    curl -L https://dl.k8s.io/v1.28.0/bin/linux/amd64/kube-apiserver -o /usr/local/kubebuilder/bin/kube-apiserver && \
+    curl -L https://dl.k8s.io/v1.28.0/bin/linux/amd64/kubectl -o /usr/local/kubebuilder/bin/kubectl && \
+    chmod +x /usr/local/kubebuilder/bin/*
+
+# Set environment variables
+ENV KUBEBUILDER_ASSETS=/usr/local/kubebuilder/bin
+ENV PATH=$PATH:/usr/local/kubebuilder/bin
+
+# Install ginkgo globally
+RUN go install github.com/onsi/ginkgo/v2/ginkgo@latest
+
+WORKDIR /workspace
+
+# Copy go.mod and go.sum first for better caching
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Run tests directly (no pre-compilation)
+CMD ["go", "test", "./internal/controller", "-v", "-ginkgo.v"]
