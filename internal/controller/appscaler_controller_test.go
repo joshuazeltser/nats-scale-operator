@@ -100,7 +100,10 @@ var _ = Describe("AppScaler Controller", func() {
 				}`, mockMessageCount)
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(response))
+
+				if err, _ := w.Write([]byte(response)); err != nil {
+					return
+				}
 			}))
 
 			// Create test deployment

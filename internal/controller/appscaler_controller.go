@@ -42,17 +42,17 @@ var scalingHistoryLock sync.Mutex
 var httpServerOnce sync.Once
 
 // RBAC permissions for AppScaler custom resource
-//+kubebuilder:rbac:groups=autoscale.example.com,resources=appscalers,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=autoscale.example.com,resources=appscalers/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=autoscale.example.com,resources=appscalers/finalizers,verbs=update
+// +kubebuilder:rbac:groups=autoscale.example.com,resources=appscalers,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=autoscale.example.com,resources=appscalers/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=autoscale.example.com,resources=appscalers/finalizers,verbs=update
 
 // RBAC permissions for Deployments
-//+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=apps,resources=deployments/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=apps,resources=deployments/finalizers,verbs=update
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=apps,resources=deployments/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=apps,resources=deployments/finalizers,verbs=update
 
 // RBAC permissions for events (optional but recommended for debugging)
-//+kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
 func (r *AppScalerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
