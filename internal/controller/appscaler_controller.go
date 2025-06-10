@@ -1,19 +1,3 @@
-/*
-Copyright 2025.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package controller
 
 import (
@@ -55,6 +39,9 @@ type ScalingEvent struct {
 var scalingHistory []ScalingEvent
 var scalingHistoryLock sync.Mutex
 
+// Add these variables to ensure HTTP server starts only once
+var httpServerOnce sync.Once
+
 // RBAC permissions for AppScaler custom resource
 //+kubebuilder:rbac:groups=autoscale.example.com,resources=appscalers,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=autoscale.example.com,resources=appscalers/status,verbs=get;update;patch
@@ -68,17 +55,13 @@ var scalingHistoryLock sync.Mutex
 // RBAC permissions for events (optional but recommended for debugging)
 //+kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the AppScaler object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.21.0/pkg/reconcile
 func (r *AppScalerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
+
+	// Start HTTP server once
+	httpServerOnce.Do(func() {
+		go r.startHTTPServer()
+	})
 
 	var scaler autoscalev1.AppScaler
 	if err := r.Get(ctx, req.NamespacedName, &scaler); err != nil {
@@ -133,7 +116,7 @@ func (r *AppScalerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			NewReplicas:    desiredReplicas,
 			Reason:         fmt.Sprintf("Queue length: %d", queueLen),
 		})
-		// Optional: keep last 100 entries
+		// Keep last 100 entries
 		if len(scalingHistory) > 100 {
 			scalingHistory = scalingHistory[len(scalingHistory)-100:]
 		}
@@ -145,28 +128,29 @@ func (r *AppScalerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}, nil
 }
 
+// startHTTPServer starts a simple HTTP server for scaling history
+func (r *AppScalerReconciler) startHTTPServer() {
+	http.HandleFunc("/scaling-history", r.handleScalingHistory)
+
+	log := logf.Log.WithName("http-server")
+	log.Info("Starting HTTP server for scaling history", "port", 8080)
+
+	if err := http.ListenAndServe(":8080", nil); err != nil {
+		log.Error(err, "HTTP server failed")
+	}
+}
+
+// handleScalingHistory returns recent scaling events
+func (r *AppScalerReconciler) handleScalingHistory(w http.ResponseWriter, req *http.Request) {
+	scalingHistoryLock.Lock()
+	defer scalingHistoryLock.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(scalingHistory)
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *AppScalerReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	// HTTP server for scaling history
-	go func() {
-		http.HandleFunc("/scaling-history", func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			scalingHistoryLock.Lock()
-			defer scalingHistoryLock.Unlock()
-			_ = json.NewEncoder(w).Encode(scalingHistory)
-		})
-
-		http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("ok"))
-		})
-
-		logf.Log.Info("Starting HTTP server on :8081")
-		if err := http.ListenAndServe(":8081", nil); err != nil {
-			logf.Log.Error(err, "HTTP server error")
-		}
-	}()
-
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&autoscalev1.AppScaler{}).
 		WithOptions(controller.Options{MaxConcurrentReconciles: 10}).
@@ -188,22 +172,29 @@ func getPendingMessagesFromJetStream(natsURL, stream string) (int, error) {
 	}
 
 	var jsData struct {
-		Streams []struct {
-			Name  string `json:"name"`
-			State struct {
-				Messages int64 `json:"messages"`
-			} `json:"state"`
-		} `json:"streams"`
+		AccountDetails []struct {
+			StreamDetail []struct {
+				Name  string `json:"name"`
+				State struct {
+					Messages json.Number `json:"messages"`
+				} `json:"state"`
+			} `json:"stream_detail"`
+		} `json:"account_details"`
 	}
 
 	if err := json.Unmarshal(body, &jsData); err != nil {
 		return 0, fmt.Errorf("failed to parse JetStream response: %w", err)
 	}
 
-	for _, s := range jsData.Streams {
-		if s.Name == stream {
-			messages := s.State.Messages
-			return int(messages), nil
+	for _, account := range jsData.AccountDetails {
+		for _, streamDetail := range account.StreamDetail {
+			if streamDetail.Name == stream {
+				messages, err := streamDetail.State.Messages.Int64()
+				if err != nil {
+					return 0, fmt.Errorf("failed to convert messages to int: %w", err)
+				}
+				return int(messages), nil
+			}
 		}
 	}
 
