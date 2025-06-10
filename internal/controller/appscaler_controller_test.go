@@ -101,7 +101,7 @@ var _ = Describe("AppScaler Controller", func() {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
 
-				if err, _ := w.Write([]byte(response)); err != nil {
+				if _, err := w.Write([]byte(response)); err != nil {
 					return
 				}
 			}))
